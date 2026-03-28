@@ -1,0 +1,38 @@
+# VStudy Backend — Project Axion v0.2
+# Install: pip install -r requirements.txt
+#
+# ── System dependencies (install separately) ──────────────────────────────
+#
+#   Tesseract OCR:
+#     Windows : https://github.com/UB-Mannheim/tesseract/wiki  (add to PATH)
+#     macOS   : brew install tesseract
+#     Ubuntu  : sudo apt install tesseract-ocr
+#
+#   Poppler (for pdf2image):
+#     Windows : https://github.com/oschwartz10612/poppler-windows/releases
+#               Extract zip → add the bin/ folder to your system PATH
+#     macOS   : brew install poppler
+#     Ubuntu  : sudo apt install poppler-utils
+
+# API framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# PDF extraction
+PyMuPDF>=1.24.0
+pdf2image>=1.17.0
+
+# OCR
+pytesseract>=0.3.10
+Pillow>=10.3.0
+
+# Embeddings — local, no API key, downloads ~80 MB model on first run
+sentence-transformers>=3.0.0
+numpy>=1.26.0
+
+# LLM subject classification
+anthropic>=0.28.0
+
+# Env vars
+python-dotenv>=1.0.0

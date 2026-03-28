@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+
+  --color-primary: #8f4f14;
+  --color-primary-container: #ffab69;
+  --color-background: #fbf9f5;
+  --color-surface: #fbf9f5;
+  --color-surface-container-low: #f5f3ef;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #eae8e4;
+  --color-on-surface: #31332f;
+  --color-on-surface-variant: #5e605b;
+  --color-outline-variant: #d8c2b5;
+  --color-tertiary: #44683b;
+  --color-tertiary-container: #d0fac0;
+  --color-secondary: #775b06;
+  --color-secondary-container: #ffdf96;
+
+  --radius-lg: 2rem;
+  --radius-xl: 3rem;
+
+  --shadow-premium: 0 20px 50px -12px rgba(83, 68, 57, 0.12);
+  --shadow-premium-hover: 0 30px 60px -12px rgba(83, 68, 57, 0.18);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-sans antialiased;
+  }
+}
+
+@layer components {
+  .glass-nav {
+    @apply bg-white/70 backdrop-blur-xl border-b border-outline-variant/15;
+  }
+  
+  .glow-cta {
+    @apply bg-gradient-to-br from-primary to-primary-container text-white shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300;
+  }
+}
