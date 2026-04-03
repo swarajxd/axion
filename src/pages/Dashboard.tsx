@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import { Sidebar } from '../components/layout/Sidebar';
 import { Card } from '../components/ui/Card';
 import { 
   Bell, 
@@ -51,12 +50,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar />
-      
-      <main className="ml-72 flex-1 p-12">
-        {/* Header */}
-        <header className="flex justify-between items-center mb-16 px-4">
+    <div className="p-12">
+      {/* Header */}
+      <header className="flex justify-between items-center mb-16 px-4">
           <div>
             <h2 className="text-5xl font-headline font-extrabold text-on-surface tracking-tight mb-3">
               Hello, {greetingName} 👋
@@ -222,7 +218,6 @@ export default function Dashboard() {
             ))}
           </div>
         </section>
-      </main>
 
       {/* FAB AI Chat */}
       <div className="fixed bottom-12 right-12 z-[60]">

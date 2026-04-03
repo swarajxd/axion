@@ -9,57 +9,93 @@ import PostAuth from './pages/PostAuth';
 import Notes from './pages/Notes';
 import SubjectPage from './pages/SubjectPage';
 import Profile from './pages/profile';
-import { Sidebar } from './components/layout/Sidebar';
+import { MainLayout } from './components/layout/MainLayout';
+import { ClassProvider } from './context/ClassContext';
 export default function App() {
   return (
-    <Router>
-      <Routes>
+    <ClassProvider>
+      <Router>
+        <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route
+          path="/dashboard"
+          element={
+            <MainLayout>
+              <Dashboard />
+            </MainLayout>
+          }
+        />
         <Route path="/post-auth" element={<PostAuth />} />
         <Route
           path="/notes"
           element={
-            <div className="min-h-screen bg-background flex">
-              <Sidebar />
-              <main className="ml-72 flex-1">
-                <Notes />
-              </main>
-            </div>
+            <MainLayout>
+              <Notes />
+            </MainLayout>
           }
         />
         <Route
           path="/notes/:subject"
           element={
-            <div className="min-h-screen bg-background flex">
-              <Sidebar />
-              <main className="ml-72 flex-1">
-                <SubjectPage />
-              </main>
-            </div>
+            <MainLayout>
+              <SubjectPage />
+            </MainLayout>
           }
         />
         {/* Placeholder Routes */}
-        <Route path="/pomodoro" element={<PlaceholderPage title="Pomodoro" />} />
-        <Route path="/tests" element={<PlaceholderPage title="Tests" />} />
-        <Route path="/analytics" element={<PlaceholderPage title="Analytics" />} />
-        <Route path="/planner" element={<PlaceholderPage title="Planner" />} />
-        <Route path="/chat" element={<PlaceholderPage title="AI Chat" />} />
+        <Route
+          path="/pomodoro"
+          element={
+            <MainLayout>
+              <PlaceholderPage title="Pomodoro" />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/tests"
+          element={
+            <MainLayout>
+              <PlaceholderPage title="Tests" />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <MainLayout>
+              <PlaceholderPage title="Analytics" />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/planner"
+          element={
+            <MainLayout>
+              <PlaceholderPage title="Planner" />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <MainLayout>
+              <PlaceholderPage title="AI Chat" />
+            </MainLayout>
+          }
+        />
         <Route
           path="/profile"
           element={
-            <div className="min-h-screen bg-background flex">
-              <Sidebar />
-              <main className="ml-72 flex-1">
-                <Profile />
-              </main>
-            </div>
+            <MainLayout>
+              <Profile />
+            </MainLayout>
           }
         />
       </Routes>
     </Router>
+  </ClassProvider>
   );
 }

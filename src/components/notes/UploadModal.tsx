@@ -1,41 +1,32 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UploadCloud, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { UploadCloud, CheckCircle, XCircle, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
+import { uploadNote, formatBytes, UploadResult } from '../../services/notesApi';
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onUploadSuccess?: () => void;
 }
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
-interface ClassificationResult {
-  class: string;
-  subject: string;
-  chapter: string;
-  confidence: number;
-  text_preview: string;
-  char_count: number;
-  error?: string;
-}
-
-const BACKEND_URL = 'http://localhost:8000';
 const ACCEPTED = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'];
 const MAX_MB = 50;
 
-/* ─────────────────────────────────────────────────────────────
-   Shared button styles — solid orange so text is ALWAYS visible
-───────────────────────────────────────────────────────────── */
 const primaryBtn =
   'bg-[#C1440E] hover:bg-[#A33B0C] text-white font-semibold rounded-full ' +
   'shadow-[0px_8px_24px_rgba(163,61,35,0.35)] active:scale-[0.98] ' +
   'transition-all flex items-center justify-center gap-2';
 
-export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => {
+export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUploadSuccess }) => {
+  const { user } = useUser();
+
   const [isDragging, setIsDragging]       = useState(false);
   const [selectedFile, setSelectedFile]   = useState<File | null>(null);
   const [status, setStatus]               = useState<UploadStatus>('idle');
-  const [result, setResult]               = useState<ClassificationResult | null>(null);
+  const [result, setResult]               = useState<UploadResult | null>(null);
   const [errorMsg, setErrorMsg]           = useState<string | null>(null);
   const [isBackendDown, setIsBackendDown] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -44,7 +35,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
     if (!file) return;
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!ACCEPTED.includes(ext)) {
-      setErrorMsg(`Unsupported type "${ext}". Accepted: PDF, JPG, PNG and other images.`);
+      setErrorMsg(`Unsupported type "${ext}". Accepted: PDF, JPG, PNG.`);
       return;
     }
     if (file.size > MAX_MB * 1024 * 1024) {
@@ -65,27 +56,32 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !user?.id) return;
     setStatus('uploading');
     setResult(null);
     setErrorMsg(null);
     setIsBackendDown(false);
 
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/upload`, { method: 'POST', body: formData });
-      const data: ClassificationResult = await res.json();
-      if (!res.ok || data.error) {
-        setErrorMsg(data.error ?? `Server responded with status ${res.status}`);
+      const data = await uploadNote(selectedFile, user.id);
+
+      if (data.error) {
+        setErrorMsg(data.detail || data.error);
         setStatus('error');
         return;
       }
+
       setResult(data);
       setStatus('success');
-    } catch {
-      setIsBackendDown(true);
+      // Notify parent to refresh note lists
+      onUploadSuccess?.();
+
+    } catch (err: any) {
+      if (err.message?.includes('fetch') || err.message?.includes('network')) {
+        setIsBackendDown(true);
+      } else {
+        setErrorMsg(err.message || 'Upload failed');
+      }
       setStatus('error');
     }
   };
@@ -103,14 +99,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={handleClose}
             className="absolute inset-0 bg-black/20 backdrop-blur-md"
           />
 
-          {/* Card */}
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -123,7 +117,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
               <div className="space-y-1.5">
                 <h2 className="text-3xl font-light tracking-[-0.04em] text-gray-900">Upload Notes</h2>
                 <p className="text-gray-500 leading-relaxed text-sm">
-                  Drop your academic papers or lecture notes here. Our AI will automatically categorize them.
+                  Drop your academic papers or lecture notes. Our AI will classify and organise them automatically.
                 </p>
               </div>
 
@@ -136,7 +130,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                   <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" />
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-amber-800">Backend server not running</p>
-                    <p className="text-xs text-amber-700">Start it with:</p>
                     <code className="block text-xs bg-amber-100 text-amber-900 px-3 py-2 rounded-lg font-mono">
                       cd backend &amp;&amp; uvicorn main:app --reload --port 8000
                     </code>
@@ -144,7 +137,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 </motion.div>
               )}
 
-              {/* Validation / server error */}
+              {/* Error */}
               {errorMsg && !isBackendDown && (
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-100">
                   <XCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
@@ -178,7 +171,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                         <>
                           <p className="text-base font-semibold text-gray-800 break-all">{selectedFile.name}</p>
                           <p className="text-sm text-gray-400">
-                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB — click to change
+                            {formatBytes(selectedFile.size)} — click to change
                           </p>
                         </>
                       ) : (
@@ -200,7 +193,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 </div>
               )}
 
-              {/* Result card */}
+              {/* Success result card */}
               {status === 'success' && result && (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -208,7 +201,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 >
                   <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
                     <CheckCircle size={18} className="text-green-500" />
-                    <span className="text-sm font-semibold text-gray-800">Classified successfully</span>
+                    <span className="text-sm font-semibold text-gray-800">
+                      Saved to your {result.subject} notes
+                    </span>
                   </div>
                   <div className="grid grid-cols-3 divide-x divide-gray-100">
                     {[
@@ -222,32 +217,37 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                       </div>
                     ))}
                   </div>
-                  {result.text_preview && (
-                    <div className="px-5 py-4 border-t border-gray-100">
-                      <p className="text-xs text-gray-400 mb-2">Text preview</p>
-                      <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">{result.text_preview}</p>
+                  {result.file_url && (
+                    <div className="px-5 py-3 border-t border-gray-100">
+                      <a
+                        href={result.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs text-[#C1440E] hover:underline"
+                      >
+                        <ExternalLink size={12} />
+                        Open file
+                      </a>
+                    </div>
+                  )}
+                  {result.warning && (
+                    <div className="px-5 py-3 border-t border-amber-100 bg-amber-50">
+                      <p className="text-xs text-amber-700">{result.warning}</p>
                     </div>
                   )}
                 </motion.div>
               )}
 
-              {/* ── Action buttons ── */}
+              {/* Actions */}
               <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-1">
                 <button
                   onClick={handleClose}
                   className="w-full sm:w-auto px-8 py-3.5 text-gray-500 font-medium hover:text-gray-800 transition-colors rounded-full"
                 >
-                  Cancel
+                  {status === 'success' ? 'Close' : 'Cancel'}
                 </button>
 
-                {status === 'success' ? (
-                  <button
-                    onClick={handleClose}
-                    className={`w-full sm:w-auto px-10 py-3.5 ${primaryBtn}`}
-                  >
-                    Done
-                  </button>
-                ) : (
+                {status !== 'success' && (
                   <button
                     onClick={handleUpload}
                     disabled={!selectedFile || status === 'uploading'}

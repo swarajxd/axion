@@ -4,8 +4,14 @@ import { Upload } from 'lucide-react';
 
 export type UploadButtonPlacement = 'floating' | 'sidebar' | 'center';
 
-export const UploadButton: React.FC<{ placement?: UploadButtonPlacement }> = ({
+interface UploadButtonProps {
+  placement?: UploadButtonPlacement;
+  onUploadSuccess?: () => void;
+}
+
+export const UploadButton: React.FC<UploadButtonProps> = ({
   placement = 'floating',
+  onUploadSuccess,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -40,6 +46,7 @@ export const UploadButton: React.FC<{ placement?: UploadButtonPlacement }> = ({
       <UploadModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onUploadSuccess={onUploadSuccess}
       />
     </>
   );
