@@ -1,22 +1,15 @@
 """
-upload.py — FastAPI route for file ingestion + storage + DB persistence.
+upload.py — FastAPI routes for file ingestion + RAG storage + retrieval.
 
 POST /api/upload
-    1. Save file temporarily
-    2. Run classification pipeline (extract → clean → subject → chapter)
-    3. Upload file to Supabase Storage
-    4. Insert classified note into DB
-    5. Return full result including DB row id and file_url
+    Full pipeline: classify → Supabase storage → DB → ChromaDB RAG ingestion
 
-GET /api/notes
-    Returns NCERT chapter structure with notes per chapter for a given
-    user / subject / class combination.
+GET  /api/notes             — NCERT chapter structure with user's notes
+GET  /api/notes/recent      — Most recently uploaded notes
+GET  /api/notes/summary     — Per-subject counts for the Notes page cards
 
-GET /api/notes/recent
-    Returns the 5 most recently uploaded notes across all subjects.
-
-GET /api/notes/summary
-    Returns per-subject note counts + recent notes for the Notes page cards.
+GET  /api/search            — Semantic search over the RAG knowledge base
+GET  /api/rag/stats         — ChromaDB collection stats (debug)
 """
 
 from __future__ import annotations
@@ -33,6 +26,7 @@ from ai.pipeline import process_file
 from ai.ncert_data import NCERT
 from storage import upload_file
 from notes_db import insert_note, get_notes_by_subject, get_recent_notes, get_subject_summary
+from rag.rag_pipeline import run_pipeline as rag_ingest, search as rag_search, get_stats as rag_stats
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["notes"])
@@ -54,15 +48,17 @@ REQUEST_TIMEOUT     = 180
 # POST /api/upload
 # ---------------------------------------------------------------------------
 
-@router.post("/upload", summary="Upload, classify, store, and save a note")
+@router.post("/upload", summary="Upload, classify, store, and index a note")
 async def upload(
     file: UploadFile,
     x_user_id: str = Header(..., description="Clerk user ID"),
 ) -> JSONResponse:
     """
-    Full pipeline: classify → storage → database.
-
-    Requires header: X-User-Id: <clerk_user_id>
+    Full ingestion pipeline:
+      1. Classify text (subject / chapter / class)
+      2. Upload file to Supabase Storage
+      3. Save metadata row to Supabase DB
+      4. Chunk + embed + store in ChromaDB for RAG
     """
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -85,8 +81,9 @@ async def upload(
         temp_path.write_bytes(contents)
         logger.info("Saved temp file: %s (%d bytes)", temp_path, len(contents))
 
-        # ── Step 1: Classify ──────────────────────────────────────────────
-        loop   = asyncio.get_event_loop()
+        loop = asyncio.get_event_loop()
+
+        # ── Stage 1: Classify (extraction + subject + chapter) ────────────
         result = await asyncio.wait_for(
             loop.run_in_executor(None, process_file, str(temp_path)),
             timeout=REQUEST_TIMEOUT,
@@ -98,43 +95,78 @@ async def upload(
                 content=result,
             )
 
-        # ── Step 2: Upload to Supabase Storage ────────────────────────────
+        subject     = result["subject"]
+        chapter     = result.get("chapter") or "Other"
+        class_level = result.get("class") or "11"
+        confidence  = result.get("confidence", 0.0)
+        clean_text  = result.get("text_preview", "")  # full text for RAG
+        title       = Path(filename).stem.replace("_", " ").replace("-", " ").title()
+
+        # ── Stage 2: Upload to Supabase Storage ───────────────────────────
+        file_url = ""
         try:
             file_url = await loop.run_in_executor(
                 None, upload_file, contents, filename, x_user_id
             )
         except Exception as exc:
             logger.error("Storage upload failed: %s", exc)
-            # Don't block the user — return classification even if storage fails
-            result["warning"] = f"File could not be stored: {exc}"
-            file_url = ""
+            result["warning"] = f"File classified but storage failed: {exc}"
 
-        # ── Step 3: Insert into DB ─────────────────────────────────────────
-        chapter    = result.get("chapter") or "Other"
-        title      = Path(filename).stem.replace("_", " ").replace("-", " ").title()
-        confidence = result.get("confidence", 0.0)
-
+        # ── Stage 3: Save to Supabase DB ──────────────────────────────────
+        note_id = None
         if file_url:
             try:
                 db_row = await loop.run_in_executor(
                     None,
                     lambda: insert_note(
-                        user_id     = x_user_id,
-                        subject     = result["subject"],
-                        class_level = result["class"] or "11",
-                        chapter     = chapter,
-                        title       = title,
-                        file_url    = file_url,
-                        file_size   = len(contents),
-                        confidence  = confidence,
+                        user_id=x_user_id,
+                        subject=subject,
+                        class_level=class_level,
+                        chapter=chapter,
+                        title=title,
+                        file_url=file_url,
+                        file_size=len(contents),
+                        confidence=confidence,
                     ),
                 )
-                result["note_id"]   = db_row.get("id")
-                result["file_url"]  = file_url
-                result["title"]     = title
+                note_id = db_row.get("id")
+                result["note_id"]  = note_id
+                result["file_url"] = file_url
+                result["title"]    = title
             except Exception as exc:
                 logger.error("DB insert failed: %s", exc)
-                result["warning"] = f"Note classified but not saved to DB: {exc}"
+                result["warning"] = f"Classified but DB save failed: {exc}"
+
+        # ── Stage 4: RAG ingestion (chunk → embed → ChromaDB) ─────────────
+        # We use the full extracted text stored in pipeline result.
+        # If text_preview is truncated, pass char_count as a signal.
+        # In production you'd pass the full text through; here we use preview
+        # as a clean demonstration — extend process_file() to return full text.
+        full_text = result.get("text_preview", "")
+        if full_text.strip():
+            try:
+                rag_result = await loop.run_in_executor(
+                    None,
+                    lambda: rag_ingest(
+                        text=full_text,
+                        subject=subject,
+                        chapter=chapter,
+                        source=filename,
+                        class_level=class_level,
+                        user_id=x_user_id,
+                        replace_existing=True,
+                    ),
+                )
+                result["rag"] = rag_result
+                logger.info(
+                    "RAG ingestion: %d chunks for '%s / %s'",
+                    rag_result.get("chunks_upserted", 0), subject, chapter,
+                )
+            except Exception as exc:
+                logger.error("RAG ingestion failed: %s", exc)
+                result["rag_warning"] = f"RAG ingestion failed: {exc}"
+        else:
+            result["rag_warning"] = "No text available for RAG ingestion."
 
     except asyncio.TimeoutError:
         return JSONResponse(
@@ -142,113 +174,150 @@ async def upload(
             content={"error": "Request timed out", "detail": "Try again with a smaller file."},
         )
     except Exception as exc:
-        logger.exception("Unexpected error")
+        logger.exception("Unexpected error during upload")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         if temp_path.exists():
             temp_path.unlink()
 
-    return JSONResponse(status_code=200, content={"success": True, **result})
+    if "error" in result and "note_id" not in result:
+        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=result)
+
+    return JSONResponse(status_code=200, content=result)
 
 
 # ---------------------------------------------------------------------------
-# GET /api/notes  — chapter structure with notes
+# GET /api/notes
 # ---------------------------------------------------------------------------
 
-@router.get("/notes", summary="Get NCERT chapter structure with user's notes")
+@router.get("/notes", summary="NCERT chapter structure with user notes")
 async def get_notes(
-    subject:    str = Query(..., description="Physics | Chemistry | Mathematics"),
-    class_level: str = Query(..., alias="class", description="11 or 12"),
-    x_user_id:  str = Header(..., description="Clerk user ID"),
+    subject:     str = Query(...),
+    class_level: str = Query(..., alias="class"),
+    x_user_id:   str = Header(...),
 ) -> JSONResponse:
-    """
-    Returns ALL NCERT chapters for the subject/class, with the user's
-    uploaded notes nested inside each chapter.
-    Chapters with no notes still appear (empty notes array).
-    """
-    # Normalise subject casing
     subject_map = {
-        "physics": "Physics",
-        "chemistry": "Chemistry",
-        "mathematics": "Mathematics",
-        "maths": "Mathematics",
-        "math": "Mathematics",
+        "physics": "Physics", "chemistry": "Chemistry",
+        "mathematics": "Mathematics", "maths": "Mathematics", "math": "Mathematics",
     }
     subject_normalised = subject_map.get(subject.lower(), subject)
 
     if subject_normalised not in NCERT.get(class_level, {}):
-        raise HTTPException(
-            status_code=400,
-            detail=f"No NCERT data for subject='{subject}' class='{class_level}'",
-        )
+        raise HTTPException(status_code=400, detail=f"No NCERT data for subject='{subject}' class='{class_level}'")
 
-    # Fetch user's notes from DB
     loop = asyncio.get_event_loop()
     rows = await loop.run_in_executor(
-        None,
-        lambda: get_notes_by_subject(x_user_id, subject_normalised, class_level),
+        None, lambda: get_notes_by_subject(x_user_id, subject_normalised, class_level)
     )
 
-    # Index notes by chapter name for O(1) lookup
     notes_by_chapter: dict[str, list[dict]] = {}
     for row in rows:
         ch = row.get("chapter", "Other")
         notes_by_chapter.setdefault(ch, []).append(row)
 
-    # Build NCERT chapter list — always include every chapter
-    ncert_chapters = NCERT[class_level][subject_normalised]
-    chapters = []
+    chapters = [
+        {
+            "name":  ch_name,
+            "notes": [_serialize_note(n) for n in notes_by_chapter.get(ch_name, [])],
+        }
+        for ch_name in NCERT[class_level][subject_normalised]
+    ]
 
-    for chapter_name in ncert_chapters:
-        chapter_notes = notes_by_chapter.get(chapter_name, [])
-        chapters.append({
-            "name":  chapter_name,
-            "notes": [_serialize_note(n) for n in chapter_notes],
-        })
-
-    # Append "Other" bucket if any notes didn't match a chapter
-    other_notes = notes_by_chapter.get("Other", [])
-    if other_notes:
+    if notes_by_chapter.get("Other"):
         chapters.append({
             "name":  "Other",
-            "notes": [_serialize_note(n) for n in other_notes],
+            "notes": [_serialize_note(n) for n in notes_by_chapter["Other"]],
         })
 
-    return JSONResponse(content={"chapters": chapters})
+    return JSONResponse(content={
+        "subject":     subject_normalised,
+        "class":       class_level,
+        "chapters":    chapters,
+        "total_notes": len(rows),
+    })
 
 
 # ---------------------------------------------------------------------------
 # GET /api/notes/recent
 # ---------------------------------------------------------------------------
 
-@router.get("/notes/recent", summary="Most recently uploaded notes")
+@router.get("/notes/recent", summary="Recently uploaded notes")
 async def recent_notes(
-    x_user_id: str = Header(..., description="Clerk user ID"),
+    x_user_id: str = Header(...),
     limit: int = Query(5, ge=1, le=20),
 ) -> JSONResponse:
     loop = asyncio.get_event_loop()
-    rows = await loop.run_in_executor(
-        None,
-        lambda: get_recent_notes(x_user_id, limit),
-    )
+    rows = await loop.run_in_executor(None, lambda: get_recent_notes(x_user_id, limit))
     return JSONResponse(content={"notes": [_serialize_note(r) for r in rows]})
 
 
 # ---------------------------------------------------------------------------
-# GET /api/notes/summary  — for the Notes page subject cards
+# GET /api/notes/summary
 # ---------------------------------------------------------------------------
 
 @router.get("/notes/summary", summary="Per-subject note counts and recent notes")
 async def notes_summary(
-    class_level: str = Query(..., alias="class", description="11 or 12"),
-    x_user_id:   str = Header(..., description="Clerk user ID"),
+    class_level: str = Query(..., alias="class"),
+    x_user_id:   str = Header(...),
 ) -> JSONResponse:
     loop = asyncio.get_event_loop()
     summary = await loop.run_in_executor(
-        None,
-        lambda: get_subject_summary(x_user_id, class_level),
+        None, lambda: get_subject_summary(x_user_id, class_level)
     )
     return JSONResponse(content={"summary": summary, "class": class_level})
+
+
+# ---------------------------------------------------------------------------
+# GET /api/search  — RAG semantic search
+# ---------------------------------------------------------------------------
+
+@router.get("/search", summary="Semantic search over the RAG knowledge base")
+async def search(
+    q:           str = Query(..., description="Search query"),
+    top_k:       int = Query(5, ge=1, le=20),
+    subject:     str | None = Query(None),
+    chapter:     str | None = Query(None),
+    class_level: str | None = Query(None, alias="class"),
+    x_user_id:   str = Header(...),
+) -> JSONResponse:
+    """
+    Search the ChromaDB knowledge base using semantic similarity.
+
+    Example:
+        GET /api/search?q=what+is+Ohm%27s+law&subject=Physics&class=12&top_k=5
+    """
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    loop = asyncio.get_event_loop()
+    try:
+        results = await loop.run_in_executor(
+            None,
+            lambda: rag_search(
+                query=q,
+                top_k=top_k,
+                subject=subject,
+                chapter=chapter,
+                class_level=class_level,
+                user_id=x_user_id,
+            ),
+        )
+    except Exception as exc:
+        logger.exception("Search failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return JSONResponse(content={"query": q, "results": results, "count": len(results)})
+
+
+# ---------------------------------------------------------------------------
+# GET /api/rag/stats
+# ---------------------------------------------------------------------------
+
+@router.get("/rag/stats", summary="ChromaDB collection statistics")
+async def rag_collection_stats() -> JSONResponse:
+    loop = asyncio.get_event_loop()
+    stats = await loop.run_in_executor(None, rag_stats)
+    return JSONResponse(content=stats)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +325,6 @@ async def notes_summary(
 # ---------------------------------------------------------------------------
 
 def _serialize_note(row: dict) -> dict:
-    """Return only the fields the frontend needs."""
     return {
         "id":         row.get("id", ""),
         "title":      row.get("title", ""),

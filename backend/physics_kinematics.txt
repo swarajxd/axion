@@ -1,0 +1,120 @@
+MOTION IN A STRAIGHT LINE
+Class 11 Physics - Chapter 3: Kinematics
+
+INTRODUCTION TO KINEMATICS
+
+Kinematics is the branch of mechanics that describes the motion of objects without considering the forces that cause the motion. It deals with concepts such as displacement, velocity, acceleration, and time.
+
+POSITION AND DISPLACEMENT
+
+The position of an object is defined with respect to a reference point called the origin. The displacement of an object is the change in its position vector. Displacement is a vector quantity, meaning it has both magnitude and direction.
+
+Displacement = Final Position - Initial Position
+x = x_final - x_initial
+
+Unlike distance, displacement can be positive, negative, or zero. For example, if a particle moves 5 metres to the right and then 5 metres back to the left, the total distance travelled is 10 metres, but the displacement is zero.
+
+VELOCITY AND SPEED
+
+Average velocity is defined as the displacement divided by the time interval over which the displacement occurs.
+
+v_avg = displacement / time = Delta x / Delta t
+
+Instantaneous velocity is the velocity at any particular instant of time. It is the limit of the average velocity as the time interval approaches zero.
+
+v = lim(Delta t -> 0) Delta x / Delta t = dx/dt
+
+Speed is the magnitude of the instantaneous velocity. Speed is always positive, while velocity can be positive or negative depending on direction.
+
+ACCELERATION
+
+Acceleration is the rate of change of velocity with time.
+
+a_avg = Delta v / Delta t
+
+Instantaneous acceleration: a = dv/dt = d²x/dt²
+
+An object accelerates when its velocity changes in magnitude, direction, or both. A car slowing down has a deceleration, which is negative acceleration in the direction of motion.
+
+EQUATIONS OF MOTION FOR UNIFORM ACCELERATION
+
+When an object moves with constant acceleration, the following kinematic equations apply:
+
+1. v = u + at
+2. s = ut + (1/2)at²
+3. v² = u² + 2as
+4. s = (u + v)/2 × t
+
+Where:
+u = initial velocity
+v = final velocity
+a = acceleration (constant)
+t = time
+s = displacement
+
+These equations are only valid when acceleration is constant and motion is in a straight line.
+
+WORK ENERGY THEOREM
+
+The work-energy theorem states that the net work done on an object equals the change in its kinetic energy.
+
+W_net = Delta KE = (1/2)mv² - (1/2)mu²
+
+This is one of the most important theorems in mechanics. When a force does positive work on an object, the kinetic energy increases. When it does negative work, kinetic energy decreases.
+
+RELATIVE VELOCITY
+
+The velocity of object A relative to object B is defined as:
+
+v_AB = v_A - v_B
+
+Where v_A and v_B are the velocities of A and B respectively with respect to the ground. Relative velocity is useful in problems involving two moving objects, such as two trains moving on parallel tracks.
+
+MOTION UNDER GRAVITY
+
+When an object is thrown vertically upward with initial velocity u:
+- Time to reach maximum height: t = u/g
+- Maximum height: H = u²/2g
+- Time of flight (total): T = 2u/g
+- Velocity on return to ground: v = u (same magnitude, opposite direction)
+
+The acceleration due to gravity g = 9.8 m/s² acts downward. Near the Earth's surface, this acceleration is approximately constant.
+
+GRAPHICAL REPRESENTATION OF MOTION
+
+Position-Time Graph (x-t graph):
+- Slope of x-t graph = instantaneous velocity
+- A straight line indicates uniform velocity
+- A curved line indicates non-uniform velocity (acceleration)
+- The steeper the slope, the greater the velocity
+
+Velocity-Time Graph (v-t graph):
+- Slope of v-t graph = instantaneous acceleration
+- Area under the v-t graph = displacement
+- A horizontal line indicates constant velocity (zero acceleration)
+- A straight sloping line indicates uniform acceleration
+
+Acceleration-Time Graph (a-t graph):
+- Area under a-t graph = change in velocity
+
+PROJECTILE MOTION
+
+Projectile motion is a combination of horizontal and vertical motions. When an object is projected at an angle theta with initial speed u:
+
+Horizontal component: u_x = u cos(theta) — remains constant
+Vertical component: u_y = u sin(theta) — changes due to gravity
+
+Time of flight: T = 2u sin(theta) / g
+Maximum height: H = u² sin²(theta) / 2g
+Horizontal range: R = u² sin(2theta) / g
+
+The range is maximum when theta = 45 degrees, giving R_max = u²/g.
+
+UNIFORM CIRCULAR MOTION
+
+When an object moves in a circle at constant speed, it undergoes uniform circular motion. Despite constant speed, it is accelerating because the direction of velocity is continuously changing.
+
+Centripetal acceleration: a = v²/r = omega²r
+Centripetal force: F = mv²/r = m omega²r
+
+The centripetal force is always directed toward the center of the circle. This is not a separate force — it is provided by whatever force keeps the object in circular motion (tension, gravity, friction, etc).

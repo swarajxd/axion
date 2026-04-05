@@ -1,41 +1,46 @@
-# VStudy Backend — Project Axion v0.3
+# Axion Backend — Project Axion v0.4
 # Install: pip install -r requirements.txt
 #
 # ── System dependencies (install separately) ──────────────────────────────
 #
-#   Poppler (required by pdf2image for PDF → image conversion):
+#   Poppler (required by pdf2image):
 #     Windows : https://github.com/oschwartz10612/poppler-windows/releases
-#               Extract zip → add the bin/ folder to your system PATH
-#               Then restart your terminal before running uvicorn
+#               Extract → add bin/ folder to PATH, restart terminal
 #     macOS   : brew install poppler
 #     Ubuntu  : sudo apt install poppler-utils
-#
-#   Google Cloud Vision (no binary needed — pure Python SDK):
-#     1. Create a GCP project and enable the Cloud Vision API
-#     2. Create a service account, download the JSON key
-#     3. Set GOOGLE_APPLICATION_CREDENTIALS=path/to/key.json in your .env
-#
-#   Tesseract is NO LONGER REQUIRED — Google Vision handles all OCR
 
-# API framework
+# ── API framework ─────────────────────────────────────────────────────────
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 
-# PDF extraction
-PyMuPDF>=1.24.0          # primary extractor — handles most modern PDFs
-pdf2image>=1.17.0        # converts PDF pages to images for Vision OCR fallback
-Pillow>=10.3.0           # image handling (used by pdf2image)
+# ── PDF extraction ────────────────────────────────────────────────────────
+PyMuPDF>=1.24.0
+pdf2image>=1.17.0
+Pillow>=10.3.0
 
-# OCR — Google Cloud Vision (replaces pytesseract entirely)
+# ── OCR ───────────────────────────────────────────────────────────────────
 google-cloud-vision>=3.7.0
 
-# Embeddings — local model, no API key, ~80 MB download on first run
+# ── LLM subject classification ────────────────────────────────────────────
+anthropic>=0.28.0
+
+# ── Embeddings ────────────────────────────────────────────────────────────
+# Used in two places:
+#   1. classifier.py  → all-MiniLM-L6-v2    (fast chapter matching)
+#   2. rag/embedding.py → BAAI/bge-large-en  (high-quality RAG embeddings)
 sentence-transformers>=3.0.0
 numpy>=1.26.0
 
-# LLM subject classification (Claude Haiku)
-anthropic>=0.28.0
+# ── RAG — LlamaIndex ─────────────────────────────────────────────────────
+llama-index-core>=0.10.0
+llama-index-readers-file>=0.1.0      # needed for Document type
 
-# Env vars
+# ── RAG — ChromaDB ───────────────────────────────────────────────────────
+chromadb>=0.5.0
+
+# ── Supabase ──────────────────────────────────────────────────────────────
+supabase>=2.4.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0
